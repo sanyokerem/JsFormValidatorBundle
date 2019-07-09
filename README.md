@@ -241,7 +241,7 @@ class User
     /**
      * @return bool
      *
-     * @Assert\True(message="The password cannot match your first name")
+     * @Assert\IsTrue(message="The password cannot match your first name")
      */
     public function isPasswordLegal()
     {

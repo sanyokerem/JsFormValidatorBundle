@@ -348,7 +348,7 @@ class BasicConstraintsEntity
 
     /**
      * @return bool
-     * @Assert\True(message="true_value")
+     * @Assert\IsTrue(message="true_value")
      */
     public function isTrue()
     {
