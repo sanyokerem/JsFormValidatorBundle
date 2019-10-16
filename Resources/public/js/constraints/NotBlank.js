@@ -9,8 +9,10 @@ function SymfonyComponentValidatorConstraintsNotBlank() {
 
     this.validate = function (value) {
         var errors = [];
-        if ([undefined, null, false, '', [], {}].indexOf(value) >= 0) {
-            errors.push(this.message.replace('{{ value }}', String(value)));
+        var f = FpJsFormValidator;
+
+        if (f.isValueEmty(value)) {
+            errors.push(this.message.replace('{{ value }}', FpJsBaseConstraint.formatValue(value)));
         }
 
         return errors;

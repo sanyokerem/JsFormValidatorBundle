@@ -9,17 +9,14 @@ function SymfonyComponentValidatorConstraintsLessThan() {
     this.value = null;
 
     this.validate = function (value) {
-        if ('' === value) {
-            return [];
-        }
-
-        if (value < this.value) {
+        var f = FpJsFormValidator;
+        if (f.isValueEmty(value) || value < this.value) {
             return [];
         } else {
             return [
                 this.message
-                    .replace('{{ value }}', String(this.value))
-                    .replace('{{ compared_value }}', String(this.value))
+                    .replace('{{ value }}', FpJsBaseConstraint.formatValue(value))
+                    .replace('{{ compared_value }}', FpJsBaseConstraint.formatValue(this.value))
             ];
         }
     }

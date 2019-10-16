@@ -10,12 +10,12 @@ function SymfonyComponentValidatorConstraintsNotEqualTo() {
 
     this.validate = function (value) {
         var errors = [];
-        if (this.value == value) {
+        if ('' !== value && this.value == value) {
             errors.push(
                 this.message
-                    .replace('{{ value }}', String(this.value))
-                    .replace('{{ compared_value }}', String(this.value))
-                    .replace('{{ compared_value_type }}', String(this.value))
+                    .replace('{{ value }}', FpJsBaseConstraint.formatValue(value))
+                    .replace('{{ compared_value }}', FpJsBaseConstraint.formatValue(this.value))
+                    .replace('{{ compared_value_type }}', FpJsBaseConstraint.formatValue(this.value))
             );
         }
 

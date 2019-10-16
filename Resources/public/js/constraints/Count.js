@@ -13,19 +13,13 @@ function SymfonyComponentValidatorConstraintsCount() {
 
     this.validate = function (value) {
         var errors = [];
+        var f = FpJsFormValidator;
 
-        var count = null;
-        if (value instanceof Array) {
-            count = value.length;
-        } else if (typeof value == 'object') {
-            count = 0;
-            for (var propName in value) {
-                if (value.hasOwnProperty(propName)) {
-                    count++;
-                }
-            }
+        if (!f.isValueArray(value) && !f.isValueObject(value)) {
+            return errors;
         }
 
+        var count = f.getValueLength(value);
         if (null !== count) {
             if (this.max === this.min && count !== this.min) {
                 errors.push(this.exactMessage);
@@ -48,17 +42,17 @@ function SymfonyComponentValidatorConstraintsCount() {
 
         this.minMessage = FpJsBaseConstraint.prepareMessage(
             this.minMessage,
-            {'{{ limit }}': this.min},
+            {'{{ limit }}': FpJsBaseConstraint.formatValue(this.min)},
             this.min
         );
         this.maxMessage = FpJsBaseConstraint.prepareMessage(
             this.maxMessage,
-            {'{{ limit }}': this.max},
+            {'{{ limit }}': FpJsBaseConstraint.formatValue(this.max)},
             this.max
         );
         this.exactMessage = FpJsBaseConstraint.prepareMessage(
             this.exactMessage,
-            {'{{ limit }}': this.min},
+            {'{{ limit }}': FpJsBaseConstraint.formatValue(this.min)},
             this.min
         );
     }

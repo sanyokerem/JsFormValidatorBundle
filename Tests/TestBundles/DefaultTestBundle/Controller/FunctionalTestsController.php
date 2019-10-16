@@ -4,22 +4,41 @@ namespace Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Controlle
 
 use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Entity\BasicConstraintsEntity;
 use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Entity\CamelCaseEntity;
+use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Entity\CommentEntity;
 use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Entity\CustomizationEntity;
+use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Entity\EmptyChoiceEntity;
+use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Entity\PasswordFieldEntity;
+use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Entity\TagEntity;
+use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Entity\TaskEntity;
 use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Entity\UniqueEntity;
+use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Form\AsyncLoadType;
 use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Form\BasicConstraintsEntityType;
 use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Form\CustomizationType;
+use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Form\EmptyChoiceType;
+use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Form\PasswordFieldType;
+use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Form\TaskType;
 use Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Form\UniqueType;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\Extension\Core\Type\DateTimeType;
+use Symfony\Component\Form\Extension\Core\Type\DateType;
+use Symfony\Component\Form\Extension\Core\Type\RadioType;
+use Symfony\Component\Form\Extension\Core\Type\RepeatedType;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Form\Extension\Core\Type\TimeType;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Validator\Constraints\Choice;
 use Symfony\Component\Validator\Constraints\Date;
 use Symfony\Component\Validator\Constraints\DateTime;
 use Symfony\Component\Validator\Constraints\Email;
 use Symfony\Component\Validator\Constraints\EqualTo;
-use Symfony\Component\Validator\Constraints\IsFalse;
 use Symfony\Component\Validator\Constraints\GreaterThan;
 use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\IdenticalTo;
 use Symfony\Component\Validator\Constraints\Ip;
+use Symfony\Component\Validator\Constraints\IsFalse;
+use Symfony\Component\Validator\Constraints\IsTrue;
 use Symfony\Component\Validator\Constraints\Length;
 use Symfony\Component\Validator\Constraints\LessThan;
 use Symfony\Component\Validator\Constraints\LessThanOrEqual;
@@ -28,7 +47,6 @@ use Symfony\Component\Validator\Constraints\NotEqualTo;
 use Symfony\Component\Validator\Constraints\NotIdenticalTo;
 use Symfony\Component\Validator\Constraints\Range;
 use Symfony\Component\Validator\Constraints\Time;
-use Symfony\Component\Validator\Constraints\IsTrue;
 use Symfony\Component\Validator\Constraints\Type;
 use Symfony\Component\Validator\Constraints\Url;
 
@@ -40,6 +58,19 @@ use Symfony\Component\Validator\Constraints\Url;
  */
 class FunctionalTestsController extends BaseTestController
 {
+    /**
+     * @return \Symfony\Component\HttpFoundation\Response
+     */
+    public function phpinfoAction() {
+        ob_start();
+        phpinfo();
+
+        return $this->render(
+            'DefaultTestBundle:FunctionalTests:phpinfo.html.twig',
+            array('phpinfo' => ob_get_clean())
+        );
+    }
+
     /**
      * @param Request $request
      * @param         $controller
@@ -81,14 +112,17 @@ class FunctionalTestsController extends BaseTestController
 
         $form = $this
             ->createFormBuilder(null, array('js_validation' => (bool)$js))
-            ->add('name', 'text', $constraint('blank.translation'))
+            ->add('name', TextType::class, $constraint('blank.translation'))
             ->getForm();
 
         $form->handleRequest($request);
 
         return $this->render(
             'DefaultTestBundle:FunctionalTests:index.html.twig',
-            array('form' => $form->createView())
+            array(
+                'form'     => $form->createView(),
+                'extraMsg' => $request->isMethod('post') ? 'passed' : '',
+            )
         );
     }
 
@@ -159,14 +193,15 @@ class FunctionalTestsController extends BaseTestController
             $entity->setTitle('test');
         }
 
-        $form = $this->createForm(new UniqueType(), $entity, array('js_validation' => (bool)$js));
+        $form = $this->createForm(UniqueType::class, $entity, array('js_validation' => (bool)$js));
         $form->handleRequest($request);
 
         return $this->render(
             'DefaultTestBundle:FunctionalTests:index.html.twig',
             array(
-                'form'     => $form->createView(),
-                'extraMsg' => $form->isValid() ? 'unique_entity_valid' : ''
+                'form'       => $form->createView(),
+                'extraMsg'   => $form->isValid() ? 'unique_entity_valid' : '',
+                'onValidate' => true,
             )
         );
     }
@@ -213,7 +248,7 @@ class FunctionalTestsController extends BaseTestController
         $entity->populate($data);
         $entity->isValid = (bool)$isValid;
         $form            = $this->createForm(
-            new BasicConstraintsEntityType(),
+            BasicConstraintsEntityType::class,
             $entity,
             array('js_validation' => (bool)$js)
         );
@@ -259,12 +294,12 @@ class FunctionalTestsController extends BaseTestController
                 ),
                 array('js_validation' => (bool)$js)
             )
-            ->add('date', 'date', array('constraints' => array(new Date())))
-            ->add('time', 'time', array('constraints' => array(new Time())))
-            ->add('datetime', 'datetime', array('constraints' => array(new DateTime())))
+            ->add('date', DateType::class, array('constraints' => array(new Date())))
+            ->add('time', TimeType::class, array('constraints' => array(new Time())))
+            ->add('datetime', DateTimeType::class, array('constraints' => array(new DateTime())))
             ->add(
                 'checkbox',
-                'checkbox',
+                CheckboxType::class,
                 array(
                     'constraints' => array(
                         new IsTrue(array(
@@ -278,7 +313,7 @@ class FunctionalTestsController extends BaseTestController
             )
             ->add(
                 'radio',
-                'radio',
+                RadioType::class,
                 array(
                     'constraints' => array(
                         new IsTrue(array(
@@ -292,7 +327,7 @@ class FunctionalTestsController extends BaseTestController
             )
             ->add(
                 'ChoicesToValues',
-                'choice',
+                ChoiceType::class,
                 array(
                     'multiple'    => true,
                     'choices'     => $choices,
@@ -310,7 +345,7 @@ class FunctionalTestsController extends BaseTestController
             )
             ->add(
                 'ChoiceToValue',
-                'choice',
+                ChoiceType::class,
                 array(
                     'multiple'    => false,
                     'choices'     => $choices,
@@ -327,7 +362,7 @@ class FunctionalTestsController extends BaseTestController
             )
             ->add(
                 'ChoicesToBooleanArray',
-                'choice',
+                ChoiceType::class,
                 array(
                     'expanded'    => true,
                     'multiple'    => true,
@@ -345,7 +380,7 @@ class FunctionalTestsController extends BaseTestController
             )
             ->add(
                 'ChoiceToBooleanArray',
-                'choice',
+                ChoiceType::class,
                 array(
                     'expanded'    => true,
                     'multiple'    => false,
@@ -363,9 +398,9 @@ class FunctionalTestsController extends BaseTestController
             )
             ->add(
                 'repeated',
-                'repeated',
+                RepeatedType::class,
                 array(
-                    'type'            => 'text',
+                    'type'            => TextType::class,
                     'invalid_message' => 'not_equal',
                     'first_options'   => array('label' => 'Field'),
                     'second_options'  => array('label' => 'Repeat Field', 'data' => $isValid ? 'asdf' : 'zxcv'),
@@ -403,8 +438,8 @@ class FunctionalTestsController extends BaseTestController
 
         $form = $this
             ->createFormBuilder(null, array('js_validation' => (bool)$js))
-            ->add('name', 'text', $constraint('name_value'))
-            ->add('email', 'text', $constraint('{{ value }}'))
+            ->add('name', TextType::class, $constraint('name_value'))
+            ->add('email', TextType::class, $constraint('{{ value }}'))
             ->getForm();
 
         $form->handleRequest($request);
@@ -438,7 +473,7 @@ class FunctionalTestsController extends BaseTestController
         $form    = $builder
             ->add(
                 'name',
-                'text',
+                TextType::class,
                 array(
                     'constraints' => array(
                         new Email(array('message' => 'wrong_email')),
@@ -471,7 +506,7 @@ class FunctionalTestsController extends BaseTestController
                     )
                 )
             )
-            ->add('email', 'text', array())
+            ->add('email', TextType::class, array())
             ->getForm();
 
         $form->handleRequest($request);
@@ -502,13 +537,13 @@ class FunctionalTestsController extends BaseTestController
 
         $builder = $this
             ->createFormBuilder(null, array('js_validation' => (bool)$js))
-            ->add('enabled', 'text', $constraint('enabled_field'));
+            ->add('enabled', TextType::class, $constraint('enabled_field'));
 
         switch ($type) {
             case 'global':
                 break;
             case 'field':
-                $builder->add('disabled', 'text', $constraint('disabled_field'));
+                $builder->add('disabled', TextType::class, $constraint('disabled_field'));
                 break;
             default:
                 break;
@@ -549,7 +584,7 @@ class FunctionalTestsController extends BaseTestController
 
         $form = $this
             ->createFormBuilder(null, array('js_validation' => (bool)$js))
-            ->add('name', 'text', $constraint('enabled_field'))
+            ->add('name', TextType::class, $constraint('enabled_field'))
             ->getForm();
 
         $form->handleRequest($request);
@@ -573,7 +608,7 @@ class FunctionalTestsController extends BaseTestController
         $form   = $this->createFormBuilder($entity, array('js_validation' => (bool)$js))
             ->add('camel_case_field')
             ->add('camelCaseField')
-            ->add('submit', 'submit')
+            ->add('submit', SubmitType::class)
             ->getForm();
 
         $form->handleRequest($request);
@@ -589,7 +624,7 @@ class FunctionalTestsController extends BaseTestController
     public function customizationAction(Request $request, $type, $js)
     {
         $entity = new CustomizationEntity();
-        $form   = $this->createForm(new CustomizationType(), $entity, array('js_validation' => (bool)$js));
+        $form   = $this->createForm(CustomizationType::class, $entity, array('js_validation' => (bool)$js));
 
         $form->handleRequest($request);
 
@@ -604,10 +639,120 @@ class FunctionalTestsController extends BaseTestController
         $entity->setEmail('existing_email');
         $entity->setName('existing_name');
 
-        $form = $this->createForm(new UniqueType(), $entity);
+        $form = $this->createForm(UniqueType::class, $entity);
         $form->handleRequest($request);
         $tpl = 'DefaultTestBundle:FunctionalTests:index.html.twig';
 
         return $this->render($tpl, array('form' => $form->createView()));
+    }
+
+    public function collectionAction(Request $request, $isValid, $js)
+    {
+        $task = new TaskEntity();
+        $task->addTag(new TagEntity());
+        $task->addComment(new CommentEntity());
+
+        $form = $this->createForm(
+            TaskType::class,
+            $task,
+            array(
+                'attr' => array(
+                    'novalidate' => 'novalidate',
+                ),
+                'js_validation' => (bool)$js
+            )
+        );
+
+        $form->handleRequest($request);
+        $tpl = 'DefaultTestBundle:FunctionalTests:collection.html.twig';
+
+        return $this->render(
+            $tpl,
+            array(
+                'form'     => $form->createView(),
+                'extraMsg' => $request->isMethod('post') ? 'done' : '',
+            )
+        );
+    }
+
+    public function empty_choiceAction(Request $request, $isValid, $js)
+    {
+        $entity = new EmptyChoiceEntity();
+
+        if ((bool)$isValid) {
+            $entity->setCity('london');
+            $entity->setCountries(array('france'));
+            $entity->setContinent('europe');
+        }
+        $form = $this->createForm(
+            EmptyChoiceType::class,
+            $entity,
+            array(
+                'js_validation' => (bool)$js
+            )
+        );
+
+        $form->handleRequest($request);
+        $tpl = 'DefaultTestBundle:FunctionalTests:empty_choice.html.twig';
+
+        return $this->render(
+            $tpl,
+            array(
+                'form'     => $form->createView(),
+                'extraMsg' => $request->isMethod('post') ? 'done' : '',
+            )
+        );
+    }
+
+    public function password_fieldAction(Request $request, $isValid, $js)
+    {
+        $entity = new PasswordFieldEntity();
+
+        if ((bool)$isValid) {
+            $entity->setPassword('test_pass');
+        }
+
+        $form   = $this->createForm(
+            PasswordFieldType::class,
+            $entity,
+            array(
+                'js_validation' => (bool)$js
+            )
+        );
+
+        $form->handleRequest($request);
+        $tpl = 'DefaultTestBundle:FunctionalTests:empty_choice.html.twig';
+
+        return $this->render(
+            $tpl,
+            array(
+                'form'     => $form->createView(),
+                'extraMsg' => $request->isMethod('post') ? 'done' : '',
+            )
+        );
+    }
+
+    public function async_loadAction(Request $request, $isValid, $js)
+    {
+        $passForm = $isValid;
+        $onLoad   = $js;
+        $form     = $this->createForm(AsyncLoadType::class, null, array('attr' => array('novalidate' => true)));
+        $form->handleRequest($request);
+
+        if ('1' == $passForm) {
+            $passForm = $form->createView();
+        } elseif ('0' == $passForm) {
+            $passForm = null;
+        }
+
+        return $this->render(
+            'DefaultTestBundle:FunctionalTests:async_load.html.twig',
+            array(
+                'form'     => $form->createView(),
+                'extraMsg' => $request->isMethod('post') ? 'done' : '',
+                'passForm' => $passForm,
+                'onLoad'    => (bool)$onLoad,
+            )
+        );
     }
 }

@@ -3,6 +3,7 @@
 namespace Fp\JsFormValidatorBundle\Twig\Extension;
 
 use Fp\JsFormValidatorBundle\Factory\JsFormValidatorFactory;
+use Symfony\Component\Form\FormView;
 
 /**
  * Class JsFormValidatorTwigExtension
@@ -11,17 +12,6 @@ use Fp\JsFormValidatorBundle\Factory\JsFormValidatorFactory;
  */
 class JsFormValidatorTwigExtension extends \Twig_Extension
 {
-    /** @var  \Twig_Environment */
-    protected $env;
-
-    /**
-     * @param \Twig_Environment $environment
-     */
-    public function initRuntime(\Twig_Environment $environment)
-    {
-        $this->env = $environment;
-    }
-
     /**
      * @var JsFormValidatorFactory
      */
@@ -52,29 +42,38 @@ class JsFormValidatorTwigExtension extends \Twig_Extension
     public function getFunctions()
     {
         return array(
-            'init_js_validation'  => new \Twig_Function_Method($this, 'getJsValidator', array('is_safe' => array('html'))),
-            'js_validator_config' => new \Twig_Function_Method($this, 'getConfig', array('is_safe' => array('html'))),
+            new \Twig_SimpleFunction('init_js_validation', array($this, 'getJsValidator'), array(
+                'is_safe' => array('html')
+            )),
+            new \Twig_SimpleFunction('js_validator_config', array($this, 'getConfig'), array(
+                'is_safe' => array('html')
+            )),
         );
     }
 
     public function getConfig()
     {
-        return '<script type="text/javascript">FpJsFormValidator.config = ' . $this->getFactory()->createJsConfigModel() . ';</script>';
+        return $this->getFactory()->getJsConfigString();
     }
 
     /**
+     * @param null|string|FormView $form
+     * @param bool                 $onLoad
+     * @param bool                 $wrapped
+     *
      * @return string
      */
-    public function getJsValidator()
+    public function getJsValidator($form = null, $onLoad = true, $wrapped = true)
     {
-        $models = $this->getFactory()->processQueue();
-
-        $result = array();
-        foreach ($models as $model) {
-            $result[] = 'FpJsFormValidator.addModel(' . $model . ');';
+        if ($form instanceof FormView) {
+            $form = $form->vars['name'];
+        }
+        $jsModels = $this->getFactory()->getJsValidatorString($form, $onLoad);
+        if ($wrapped) {
+            $jsModels = '<script type="text/javascript">' . $jsModels . '</script>';
         }
 
-        return '<script type="text/javascript">' . implode("\n", $result) . '</script>';
+        return $jsModels;
     }
 
     /**

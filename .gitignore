@@ -1,6 +1,8 @@
-.idea
 vendor
 composer.lock
 composer.phar
 build/*
 Tests/app/Resources/local_config.php
+Resources/public/js/fp_js_validator.js
+phpunit.xml
+/.idea

@@ -28,9 +28,10 @@ function SymfonyComponentValidatorConstraintsChoice() {
 
         if (this.multiple) {
             if (invalidCnt) {
-                while (invalidCnt--) {
-                    errors.push(this.multipleMessage.replace('{{ value }}', String(invalidList[invalidCnt])));
-                }
+                errors.push(this.multipleMessage.replace(
+                    '{{ value }}',
+                    FpJsBaseConstraint.formatValue(invalidList[0])
+                ));
             }
             if (!isNaN(this.min) && value.length < this.min) {
                 errors.push(this.minMessage);
@@ -40,7 +41,10 @@ function SymfonyComponentValidatorConstraintsChoice() {
             }
         } else if (invalidCnt) {
             while (invalidCnt--) {
-                errors.push(this.message.replace('{{ value }}', String(invalidList[invalidCnt])));
+                errors.push(this.message.replace(
+                    '{{ value }}',
+                    FpJsBaseConstraint.formatValue(invalidList[invalidCnt])
+                ));
             }
         }
 
@@ -53,12 +57,12 @@ function SymfonyComponentValidatorConstraintsChoice() {
 
         this.minMessage = FpJsBaseConstraint.prepareMessage(
             this.minMessage,
-            {'{{ limit }}': this.min},
+            {'{{ limit }}': FpJsBaseConstraint.formatValue(this.min)},
             this.min
         );
         this.maxMessage = FpJsBaseConstraint.prepareMessage(
             this.maxMessage,
-            {'{{ limit }}': this.max},
+            {'{{ limit }}': FpJsBaseConstraint.formatValue(this.max)},
             this.max
         );
     };
@@ -103,10 +107,10 @@ function SymfonyComponentValidatorConstraintsChoice() {
         // More precise comparison by type
         if (this.strict) {
             callbackFilter = function (n) {
-                var result = false;
+                var result = true;
                 for (var i in validChoices) {
-                    if (n !== validChoices[i]) {
-                        result = true;
+                    if (n === validChoices[i]) {
+                        result = false;
                     }
                 }
                 return result;

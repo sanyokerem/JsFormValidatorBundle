@@ -34,11 +34,6 @@ class JsFormElement extends JsModelAbstract
     /**
      * @var bool
      */
-    public $cascade = false;
-
-    /**
-     * @var bool
-     */
     public $bubbling = false;
 
     /**
@@ -55,4 +50,9 @@ class JsFormElement extends JsModelAbstract
      * @var JsFormElement[]
      */
     public $children = array();
+
+    /**
+     * @var JsFormElement
+     */
+    public $prototype = null;
 } 

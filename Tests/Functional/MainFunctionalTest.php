@@ -12,6 +12,15 @@ use Fp\JsFormValidatorBundle\Tests\BaseMinkTestCase;
  */
 class MainFunctionalTest extends BaseMinkTestCase
 {
+// TODO make test with comparison WEB and CLI versions of PHP
+//    /**
+//     * Take screenshot of phpinfo page
+//     */
+//    public function testPHPInfo()
+//    {
+//        $this->visitTest('phpinfo');
+//        var_dump($this->makeScreenshot());
+//    }
 
     /**
      * Test translation service
@@ -25,6 +34,13 @@ class MainFunctionalTest extends BaseMinkTestCase
         $sfErrors = $this->getAllErrorsOnPage('translations/test/0');
         $fpErrors = $this->getAllErrorsOnPage('translations/test/1');
         $this->assertErrorsEqual($sfErrors, $fpErrors, 'Was translated with a custom domain.');
+
+        $page = $this->session->getPage();
+        $page->findField('form_name')->setValue('asdf');
+        $page->findLink('a_submit')->click();
+        $this->session->wait(5000, '$("#extra_msg").text() == "passed"');
+        $extraMsg = $this->session->getPage()->find('css', '#extra_msg')->getText();
+        $this->assertEquals('passed', $extraMsg, 'Submittion with link is passed');
     }
 
     /**
@@ -64,14 +80,19 @@ class MainFunctionalTest extends BaseMinkTestCase
         $fpErrors = $this->getAllErrorsOnPage('unique_entity/0/1', '$("ul.form-errors li").length == 5');
         $this->assertErrorsEqual($sfErrors, $fpErrors, 'The unique entity constraint has all the errors.');
 
+        /** @var DocumentElement $page */
+        $page = $this->session->getPage();
+        $onValidateMsg = $page->find('css', '#on_validate_msg_container')->getText();
+        $this->assertErrorsEqual($sfErrors, explode(', ', $onValidateMsg));
+
 
         $fpErrors = $this->getAllErrorsOnPage('unique_entity/0/1', '$("ul.form-errors li").length == 5');
         $this->assertCount(5, $fpErrors);
         /** @var DocumentElement $page */
         $page = $this->session->getPage();
-        $page->findField('form_name')->setValue('a');
-        $page->findField('form_email')->setValue('a');
-        $page->findField('form_title')->setValue('a');
+        $page->findField('unique_name')->setValue('a');
+        $page->findField('unique_email')->setValue('a');
+        $page->findField('unique_title')->setValue('a');
         $page->findLink('a_submit')->click();
         $this->session->wait(5000, '$("#extra_msg").text() == "unique_entity_valid"');
         $extraMsg = $this->session->getPage()->find('css', '#extra_msg')->getText();
@@ -194,11 +215,7 @@ class MainFunctionalTest extends BaseMinkTestCase
             $sfErrors,
             'Sub request: a form was validated on the server side'
         );
-        $this->assertEquals(
-            'disabled_validation',
-            $this->find('#extra_msg')->getText(),
-            'Sub request: marker form the server side exists'
-        );
+        $this->assertTrue($this->wasPostRequest());
 
         $fpErrors = $this->getAllErrorsOnPage('sub_request/-/1');
         $this->assertEquals(
@@ -206,11 +223,7 @@ class MainFunctionalTest extends BaseMinkTestCase
             $fpErrors,
             'Sub request: a form was validated on the JS side'
         );
-        $this->assertEquals(
-            '',
-            $this->find('#extra_msg')->getText(),
-            'Sub request: marker form the server side does not exist'
-        );
+        $this->assertFalse($this->wasPostRequest());
     }
 
     /**
@@ -240,11 +253,26 @@ class MainFunctionalTest extends BaseMinkTestCase
             'validate_callback_email_custom'
         );
 
-        $jqErrors = $this->getAllErrorsOnPage('customization/jq/1');
+        $jqErrors = $this->getAllErrorsOnPage('customization/jq/1', null, 'customization_submit');
         $this->assertErrorsEqual($expected, $jqErrors, 'All the jQuery customizations were applied');
 
-        $jsErrors = $this->getAllErrorsOnPage('customization/js/1');
+        /** @var DocumentElement $page */
+        $page = $this->session->getPage();
+        $onValidateMsg = $page->find('css', '#on_validate_msg_container')->getText();
+        $this->assertErrorsEqual($expected, explode(', ', $onValidateMsg));
+
+        $field = $page->findField('customization_showErrors');
+        $field->setValue('asdf');
+        $field->blur();
+        $this->assertNull($page->find('css', '.form-error-custom-form-name-showErrors'));
+
+        $jsErrors = $this->getAllErrorsOnPage('customization/js/1', null, 'customization_submit');
         $this->assertErrorsEqual($expected, $jsErrors, 'All the Javascript customizations were applied');
+
+        /** @var DocumentElement $page */
+        $page = $this->session->getPage();
+        $onValidateMsg = $page->find('css', '#on_validate_msg_container')->getText();
+        $this->assertErrorsEqual($expected, explode(', ', $onValidateMsg));
     }
 
     /**
@@ -254,5 +282,184 @@ class MainFunctionalTest extends BaseMinkTestCase
     {
         $sfErrors = $this->getAllErrorsOnPage('customUniqueEntityController/-/-');
         $this->assertErrorsEqual(array('not_blank_value'), $sfErrors, 'The custom UniqueConstraint controller works fine.');
+    }
+
+    public function testCollection()
+    {
+        $errors = $this->getAllErrorsOnPage('collection/-/-', null, 'task_submit');
+        $page = $this->session->getPage();
+        $submit = $page->findButton('task_submit');
+        $getErrors = function () use ($page) {
+            $errors = array();
+            /** @var \Behat\Mink\Element\NodeElement $item */
+            foreach ($page->findAll('css', 'ul.form-errors li') as $item) {
+                $errors[] = $item->getText();
+            }
+
+            return $errors;
+        };
+        $getExpected = function ($tags, $comments, $collection) {
+            $errors = array(
+                'tag_message' => $tags,
+                'comment_message' => $comments,
+            );
+            if ($collection) {
+                $errors['collection_min_count_message'] = $collection;
+            }
+
+            return $errors;
+        };
+
+        $this->assertEquals($getExpected(1, 1, 1), array_count_values($errors));
+
+        $addTag = $this->find('#add_tag_link');
+        $addTag->click();
+        $addTag->click();
+        $addTag->click();
+        $addComment = $this->find('#add_comment_link');
+        $addComment->click();
+        $addComment->click();
+        $submit->click();
+
+        $this->assertEquals($getExpected(1, 1, 0), array_count_values($getErrors()));
+
+        $this->find('#del_task_tags_2')->click();
+        $this->find('#del_task_comments_1')->click();
+        $submit->click();
+        $this->assertEquals($getExpected(1, 1, 0), array_count_values($getErrors()));
+
+        $page->findField('task_tags_0_title')->setValue('asdf');
+        $page->findField('task_tags_1_title')->setValue('asdf');
+        $page->findField('task_tags_3_title')->setValue('asdf');
+        $page->findField('task_comments_0_content')->setValue('asdf');
+        $page->findField('task_comments_2_content')->setValue('asdf');
+        $submit->click();
+        $extraMsgEl = $this->session->getPage()->find('css', '#extra_msg');
+        $this->assertNotNull($extraMsgEl);
+        $this->assertEquals('done', $extraMsgEl->getText());
+    }
+
+    public function testEmptyChoice()
+    {
+        $sfErrors = $this->getAllErrorsOnPage('empty_choice/1/0', null, 'empty_choice_submit');
+        $this->assertTrue($this->wasPostRequest());
+        $fpErrors = $this->getAllErrorsOnPage('empty_choice/1/1', null, 'empty_choice_submit');
+        $this->assertTrue($this->wasPostRequest());
+        $this->assertErrorsEqual($sfErrors, $fpErrors, 'Choice fields are valid.');
+
+        $sfErrors = $this->getAllErrorsOnPage('empty_choice/0/0', null, 'empty_choice_submit');
+        $this->assertTrue($this->wasPostRequest());
+        $fpErrors = $this->getAllErrorsOnPage('empty_choice/0/1', null, 'empty_choice_submit');
+        $this->assertFalse($this->wasPostRequest());
+        $this->assertErrorsEqual($sfErrors, $fpErrors, 'Choice fields have all the errors.');
+    }
+
+    public function testPasswordField()
+    {
+        $btnId = 'password_field_submit';
+        // Check the valid values
+        $sfErrors = $this->getAllErrorsOnPage('password_field/1/0', null, $btnId);
+        $fpErrors = $this->getAllErrorsOnPage('password_field/1/1', null, $btnId);
+        $this->assertErrorsEqual($sfErrors, $fpErrors, 'Choice fields are valid.');
+
+        $session = $this->session;
+        $changeAndGetErrors = function ($first, $second) use ($session) {
+            $page = $session->getPage();
+            $submit = $page->findButton('password_field_submit');
+
+            // Check the Length constraint
+            $page->findField('password_field_password_first')->setValue($first);
+            $page->findField('password_field_password_second')->setValue($second);
+            $submit->click();
+            $errors = array();
+            /** @var \Behat\Mink\Element\NodeElement $item */
+            foreach ($page->findAll('css', 'ul.form-errors li') as $item) {
+                $errors[] = $item->getText();
+            }
+
+            return $errors;
+        };
+
+        $sfErrors = array(
+            $this->getAllErrorsOnPage('password_field/0/0', null, $btnId), // blank fields
+            $changeAndGetErrors('a', 'a'), // too short
+            $changeAndGetErrors('lorem', 'qwerty'), // not equal
+        );
+
+        $fpErrors = array(
+            $this->getAllErrorsOnPage('password_field/0/1', null, $btnId), // blank fields
+            $changeAndGetErrors('a', 'a'), // too short
+            $changeAndGetErrors('lorem', 'qwerty'), // not equal
+        );
+
+        $this->assertEquals($sfErrors, $fpErrors, 'All the errors are correct');
+    }
+
+    public function testAsyncLoad()
+    {
+        $onLoad  = '1'; // initialize by onDocumentReady
+        $this->visitTest("async_load/0/{$onLoad}");
+
+        $page = $this->session->getPage();
+        $submit = $page->findButton('async_load_submit');
+        $this->assertNotNull($submit, "Button ID 'async_load_submit' does not found'");
+        $initBtn = $page->findButton('init');
+
+        $submit->click();
+        $this->assertTrue($this->wasPostRequest(), 'Validation is disabled');
+
+        $this->visitTest("async_load/0/{$onLoad}");
+        $initBtn->click();
+        $submit->click();
+        $this->assertTrue($this->wasPostRequest(), 'Validation is still disabled');
+
+        $onLoad = '0'; // initialize directly by addModel
+        $this->visitTest("async_load/0/{$onLoad}");
+
+        $submit->click();
+        $this->assertTrue($this->wasPostRequest(), 'Validation is disabled');
+
+        $this->visitTest("async_load/0/{$onLoad}");
+        $initBtn->click();
+        $submit->click();
+        $this->assertFalse($this->wasPostRequest(), 'Validation is enabled');
+    }
+
+    public function testPassForm_as_object()
+    {
+        $form = '1'; // pass form as a FormView object
+        $this->visitTest("async_load/{$form}/1");
+
+        $page = $this->session->getPage();
+        $submit = $page->findButton('async_load_submit');
+        $this->assertNotNull($submit, "Button ID 'async_load_submit' does not found'");
+        $submit->click();
+        $errors = $this->fetchErrors();
+        $this->assertEquals(array('async_load_message'), $errors, 'Correct errors');
+        $this->assertFalse($this->wasPostRequest(), 'Validation works fine');
+    }
+
+    public function testPassForm_as_string()
+    {
+        $form = 'async_load'; // pass form as a name string
+        $this->visitTest("async_load/{$form}/1");
+
+        $page = $this->session->getPage();
+        $submit = $page->findButton('async_load_submit');
+        $this->assertNotNull($submit, "Button ID 'async_load_submit' does not found'");
+        $submit->click();
+        $errors = $this->fetchErrors();
+        $this->assertEquals(array('async_load_message'), $errors, 'Correct errors');
+        $this->assertFalse($this->wasPostRequest(), 'Validation works fine');
+    }
+
+    public function testPassForm_invalid()
+    {
+        $form = 'wrong_name'; // pass form as a name string
+        $this->visitTest("async_load/{$form}/1");
+        $page = $this->session->getPage();
+
+        $this->assertTrue($page->hasContent('Fp\JsFormValidatorBundle\Exception\UndefinedFormException'), 'Exception was thrown');
+        $this->assertTrue($page->hasContent("Form 'wrong_name' was not found. Existing forms: async_load"), 'Correct message');
     }
 }

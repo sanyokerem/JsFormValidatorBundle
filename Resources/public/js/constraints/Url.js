@@ -8,11 +8,13 @@ function SymfonyComponentValidatorConstraintsUrl() {
     this.message = '';
 
     this.validate = function(value, element) {
-        var errors = [];
         var regexp = /(ftp|https?):\/\/(www\.)?[\w\-\.@:%_\+~#=]+\.\w{2,3}(\/\w+)*(\?.*)?/;
-        if (String(value).length > 0 && !regexp.test(value)) {
+        var errors = [];
+        var f = FpJsFormValidator;
+
+        if (!f.isValueEmty(value) && !regexp.test(value)) {
             element.domNode.value = 'http://' + value;
-            errors.push(this.message.replace('{{ value }}', String('http://' + value)));
+            errors.push(this.message.replace('{{ value }}', FpJsBaseConstraint.formatValue('http://' + value)));
         }
 
         return errors;

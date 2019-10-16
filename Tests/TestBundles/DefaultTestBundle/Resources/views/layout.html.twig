@@ -8,9 +8,17 @@
         {% endjavascripts %}
     {% endblock %}
 
-    {{ include('FpJsFormValidatorBundle::javascripts-dev.html.twig') }}
+    {% block init_validation %}
+        {{ include('FpJsFormValidatorBundle::javascripts-dev.html.twig') }}
+    {% endblock init_validation %}
+    <style type="text/css">
+        .form-errors li {
+            color: red;
+        }
+    </style>
 </head>
 <body>
+{% block extra_msg %}<div id="extra_msg">{{ extraMsg|default('') }}</div>{% endblock %}
 {% block body %}{% endblock %}
 </body>
 </html>

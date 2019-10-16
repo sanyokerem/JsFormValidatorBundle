@@ -3,8 +3,9 @@
 namespace Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Form;
 
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\FormBuilderInterface;
-use Symfony\Component\OptionsResolver\OptionsResolverInterface;
+use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
  * Class TestFormType
@@ -24,29 +25,24 @@ class CustomizationType extends AbstractType
             ->add('showErrors')
             ->add('callbackGroups')
             ->add('email')
-            ->add('submit', 'submit');
+            ->add('submit', SubmitType::class);
     }
 
     /**
-     * @param OptionsResolverInterface $resolver
+     * @param OptionsResolver $resolver
      */
-    public function setDefaultOptions(OptionsResolverInterface $resolver)
+    public function configureOptions(OptionsResolver $resolver)
     {
         $resolver->setDefaults(
             array(
                 'data_class'        => 'Fp\JsFormValidatorBundle\Tests\TestBundles\DefaultTestBundle\Entity\CustomizationEntity',
                 'validation_groups' => function () {
                         return array('groups_callback');
-                    }
+                    },
+                'attr' => array(
+                    'novalidate' => 'novalidate'
+                )
             )
         );
-    }
-
-    /**
-     * @return string
-     */
-    public function getName()
-    {
-        return 'form';
     }
 }

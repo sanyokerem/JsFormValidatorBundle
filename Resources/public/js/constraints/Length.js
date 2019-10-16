@@ -13,19 +13,19 @@ function SymfonyComponentValidatorConstraintsLength() {
 
     this.validate = function (value) {
         var errors = [];
-        if (typeof value == 'number' || typeof value == 'string' || value instanceof Array) {
-            var length = value.length;
-            if (length) {
-                if (this.max === this.min && length !== this.min) {
-                    errors.push(this.exactMessage);
-                    return errors;
-                }
-                if (!isNaN(this.max) && length > this.max) {
-                    errors.push(this.maxMessage);
-                }
-                if (!isNaN(this.min) && length < this.min) {
-                    errors.push(this.minMessage);
-                }
+        var f = FpJsFormValidator;
+        var length = f.getValueLength(value);
+
+        if ('' !== value && null !== length) {
+            if (this.max === this.min && length !== this.min) {
+                errors.push(this.exactMessage);
+                return errors;
+            }
+            if (!isNaN(this.max) && length > this.max) {
+                errors.push(this.maxMessage);
+            }
+            if (!isNaN(this.min) && length < this.min) {
+                errors.push(this.minMessage);
             }
         }
 
@@ -38,17 +38,17 @@ function SymfonyComponentValidatorConstraintsLength() {
 
         this.minMessage = FpJsBaseConstraint.prepareMessage(
             this.minMessage,
-            {'{{ limit }}': this.min},
+            {'{{ limit }}': FpJsBaseConstraint.formatValue(this.min)},
             this.min
         );
         this.maxMessage = FpJsBaseConstraint.prepareMessage(
             this.maxMessage,
-            {'{{ limit }}': this.max},
+            {'{{ limit }}': FpJsBaseConstraint.formatValue(this.max)},
             this.max
         );
         this.exactMessage = FpJsBaseConstraint.prepareMessage(
             this.exactMessage,
-            {'{{ limit }}': this.min},
+            {'{{ limit }}': FpJsBaseConstraint.formatValue(this.min)},
             this.min
         );
     }

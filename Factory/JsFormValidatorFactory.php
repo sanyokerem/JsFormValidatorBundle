@@ -1,21 +1,22 @@
 <?php
 namespace Fp\JsFormValidatorBundle\Factory;
 
+use Fp\JsFormValidatorBundle\Exception\UndefinedFormException;
 use Fp\JsFormValidatorBundle\Form\Constraint\UniqueEntity;
 use Fp\JsFormValidatorBundle\Model\JsConfig;
 use Fp\JsFormValidatorBundle\Model\JsFormElement;
-use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity as BaseUniqueEntity;
+use Symfony\Component\Form\ChoiceList\ChoiceListInterface;
 use Symfony\Component\Form\DataTransformerInterface;
-use Symfony\Component\Form\Extension\Core\ChoiceList\ChoiceListInterface;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\Extension\Core\Type\HiddenType;
 use Symfony\Component\Form\Form;
 use Symfony\Component\Form\FormInterface;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Translation\TranslatorInterface;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
 use Symfony\Component\Validator\Mapping\GetterMetadata;
 use Symfony\Component\Validator\Mapping\PropertyMetadata;
-use Symfony\Component\Validator\ValidatorInterface;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
  * This factory uses to parse a form to a tree of JsFormElement's
@@ -37,7 +38,7 @@ class JsFormValidatorFactory
     protected $translator;
 
     /**
-     * @var UrlGeneratorInterface
+     * @var \Symfony\Component\Routing\Generator\UrlGeneratorInterface
      */
     protected $router;
 
@@ -64,14 +65,14 @@ class JsFormValidatorFactory
     /**
      * @param ValidatorInterface    $validator
      * @param TranslatorInterface   $translator
-     * @param UrlGeneratorInterface $router
+     * @param \Symfony\Component\Routing\Generator\UrlGeneratorInterface $router
      * @param array                 $config
      * @param string                $domain
      */
     public function __construct(
         ValidatorInterface $validator,
         TranslatorInterface $translator,
-        UrlGeneratorInterface $router,
+        $router,
         $config,
         $domain
     ) {
@@ -92,7 +93,7 @@ class JsFormValidatorFactory
      */
     protected function getMetadataFor($className)
     {
-        return $this->validator->getMetadataFactory()->getMetadataFor($className);
+        return $this->validator->getMetadataFor($className);
     }
 
     /**
@@ -103,9 +104,9 @@ class JsFormValidatorFactory
      * @return string
      * @codeCoverageIgnore
      */
-    protected function translateMessage($message)
+    protected function translateMessage($message, array $parameters = array())
     {
-        return $this->translator->trans($message, array(), $this->transDomain);
+        return $this->translator->trans($message, $parameters, $this->transDomain);
     }
 
     /**
@@ -156,6 +157,16 @@ class JsFormValidatorFactory
     }
 
     /**
+     * Returns the current queue
+     *
+     * @return \Symfony\Component\Form\Form[]
+     */
+    public function getQueue()
+    {
+        return $this->queue;
+    }
+
+    /**
      * Add a new form to processing queue
      *
      * @param \Symfony\Component\Form\Form $form
@@ -180,15 +191,30 @@ class JsFormValidatorFactory
     }
 
     /**
+     * Removes from the queue elements which are not parent forms and should not be processes
+     *
+     * @return $this
+     */
+    public function siftQueue()
+    {
+        foreach ($this->queue as $name => $form) {
+            $blockName = $form->getConfig()->getOption('block_name');
+            if ('_token' == $name || 'entry' == $blockName || $form->getParent()) {
+                unset($this->queue[$name]);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
      * @return JsFormElement[]
      */
     public function processQueue()
     {
         $result = array();
-
         foreach ($this->queue as $form) {
-            $model = $this->createJsModel($form);
-            if ($model) {
+            if (null !== ($model = $this->createJsModel($form))) {
                 $result[] = $model;
             }
         };
@@ -218,13 +244,23 @@ class JsFormValidatorFactory
         $model                 = new JsFormElement;
         $model->id             = $this->getElementId($form);
         $model->name           = $form->getName();
-        $model->type           = $conf->getType()->getInnerType()->getName();
-        $model->invalidMessage = $conf->getOption('invalid_message');
-        $model->transformers   = $this->parseTransformers($form->getConfig()->getViewTransformers());
-        $model->cascade        = $conf->getOption('cascade_validation');
+        $model->type           = get_class($conf->getType()->getInnerType());
+        $model->invalidMessage = $this->translateMessage(
+            $conf->getOption('invalid_message'),
+            $conf->getOption('invalid_message_parameters')
+        );
+        $model->transformers   = $this->normalizeViewTransformers(
+            $form,
+            $this->parseTransformers($conf->getViewTransformers())
+        );
         $model->bubbling       = $conf->getOption('error_bubbling');
         $model->data           = $this->getValidationData($form);
         $model->children       = $this->processChildren($form);
+
+        $prototype = $form->getConfig()->getAttribute('prototype');
+        if ($prototype) {
+            $model->prototype = $this->createJsModel($prototype);
+        }
 
         // Return self id to add it as child to the parent model
         return $model;
@@ -283,8 +319,8 @@ class JsFormValidatorFactory
         $parent = $form->getParent();
         if ($parent && null !== $parent->getConfig()->getDataClass()) {
             $classMetadata = $metadata = $this->getMetadataFor($parent->getConfig()->getDataClass());
-            if ($classMetadata->hasMemberMetadatas($form->getName())) {
-                $metadata = $classMetadata->getMemberMetadatas($form->getName());
+            if ($classMetadata->hasPropertyMetadata($form->getName())) {
+                $metadata = $classMetadata->getPropertyMetadata($form->getName());
                 /** @var PropertyMetadata $item */
                 foreach ($metadata as $item) {
                     $this->composeValidationData(
@@ -412,8 +448,33 @@ class JsFormValidatorFactory
      */
     protected function isProcessableElement($element)
     {
-        return ($element instanceof Form)
-        && ('hidden' !== $element->getConfig()->getType()->getName());
+        return ($element instanceof Form) && (!is_a($element->getConfig()->getType(), HiddenType::class, true));
+    }
+
+    /**
+     * Gets view transformers from the given form.
+     * Merges in an extra Choice(s)ToBooleanArrayTransformer transformer in case of expanded choice.
+     *
+     * @param FormInterface $form
+     * @param array $viewTransformers
+     *
+     * @return array
+     */
+    protected function normalizeViewTransformers(FormInterface $form, array $viewTransformers)
+    {
+        $config = $form->getConfig();
+
+        // Choice(s)ToBooleanArrayTransformer was deprecated in SF2.7 in favor of CheckboxListMapper and RadioListMapper
+        if ($config->getType()->getInnerType() instanceof ChoiceType && $config->getOption('expanded')) {
+            $namespace = 'Symfony\Component\Form\Extension\Core\DataTransformer\\';
+            $transformer = $config->getOption('multiple')
+                ? array('name' => $namespace . 'ChoicesToBooleanArrayTransformer')
+                : array('name' => $namespace . 'ChoiceToBooleanArrayTransformer');
+            $transformer['choiceList'] = array_values($config->getOption('choices'));
+            array_unshift($viewTransformers, $transformer);
+        }
+
+        return $viewTransformers;
     }
 
     /**
@@ -439,7 +500,6 @@ class JsFormValidatorFactory
 
             $result[] = $item;
         }
-
         return $result;
     }
 
@@ -463,7 +523,7 @@ class JsFormValidatorFactory
         } elseif (is_scalar($value) || is_array($value)) {
             $result = $value;
         } elseif ($value instanceof ChoiceListInterface) {
-            $result = $value->getChoices();
+            $result = array_values($value->getChoices());
         }
 
         return $result;
@@ -504,7 +564,7 @@ class JsFormValidatorFactory
                 }
             }
 
-            if ($item instanceof BaseUniqueEntity) {
+            if ($item instanceof \Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity) {
                 $item = new UniqueEntity($item, $this->currentElement->getConfig()->getDataClass());
             }
 
@@ -512,5 +572,47 @@ class JsFormValidatorFactory
         }
 
         return $result;
+    }
+
+    public function getJsConfigString()
+    {
+        return '<script type="text/javascript">FpJsFormValidator.config = ' . $this->createJsConfigModel() . ';</script>';
+    }
+
+    /**
+     * @param string $formName
+     * @param bool   $onLoad
+     *
+     * @throws \Fp\JsFormValidatorBundle\Exception\UndefinedFormException
+     * @return string
+     */
+    public function getJsValidatorString($formName = null, $onLoad = true)
+    {
+        $onLoad = $onLoad ? 'true' : 'false';
+        $this->siftQueue();
+
+        $models = array();
+        // Process just the specified form
+        if ($formName) {
+            if (!isset($this->queue[$formName])) {
+                $list = implode(', ', array_keys($this->queue));
+                throw new UndefinedFormException("Form '$formName' was not found. Existing forms: $list");
+            }
+            $models[] = $this->createJsModel($this->queue[$formName]);
+            unset($this->queue[$formName]);
+        } else { // Or process whole queue
+            $models = $this->processQueue();
+        }
+        // If there are no forms to validate
+        if (!array_filter($models)) {
+            return '';
+        }
+
+        $result = array();
+        foreach ($models as $model) {
+            $result[] = "FpJsFormValidator.addModel({$model}, {$onLoad});";
+        }
+
+        return implode("\n", $result);
     }
 }
